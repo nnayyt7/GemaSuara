@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { readFile, mkdir, writeFile, rename } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { listen } from './listen.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dataDir = path.resolve(process.env.DATA_DIR || path.join(root, '.data'));
@@ -33,11 +34,14 @@ const allowedOrigins = new Set((process.env.ALLOWED_ORIGINS || '').split(',').ma
 const crossSite = process.env.COOKIE_SAME_SITE === 'none';
 if (crossSite && process.env.COOKIE_SECURE !== 'true') throw new Error('COOKIE_SAME_SITE=none requires COOKIE_SECURE=true');
 const cookieFlags = `HttpOnly; SameSite=${crossSite ? 'None' : 'Lax'}; Path=/${process.env.COOKIE_SECURE === 'true' ? '; Secure' : ''}`;
-const vite = production ? null : await (await import('vite')).createServer({ root, server: { middlewareMode: true }, appType: 'spa' });
+let vite;
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   if (!url.pathname.startsWith('/api/')) {
-    if (vite) return vite.middlewares(req, res);
+    if (!production) {
+      if (vite) return vite.middlewares(req, res);
+      res.writeHead(503, { 'Retry-After': '1' }); res.end('Server sedang disiapkan.'); return;
+    }
     try {
       const pathname = decodeURIComponent(url.pathname);
       const relative = pathname.startsWith('/assets/') ? pathname.slice(1) : 'index.html';
@@ -129,4 +133,16 @@ const server = http.createServer(async (req, res) => {
   } catch (error) { console.error(error); if (!res.headersSent) json(res, 400, { error: 'Permintaan gagal. Silakan coba lagi.' }); else res.end(); }
 });
 const port = Number(process.env.PORT || 5173);
-server.listen(port, process.env.HOST || '127.0.0.1', () => console.log(`GemaSuara siap: http://localhost:${port}`));
+const host = process.env.HOST || '127.0.0.1';
+try {
+  const actualPort = await listen(server, { port, host, retry: !production, onRetry: (busyPort) => console.log(`Port ${busyPort} sedang dipakai. Mencoba ${busyPort + 1}…`) });
+  if (!production) {
+    vite = await (await import('vite')).createServer({ root, server: { middlewareMode: true, hmr: { server, clientPort: actualPort } }, appType: 'spa' });
+  }
+  console.log(`GemaSuara siap: http://${host === '0.0.0.0' ? 'localhost' : host}:${actualPort}`);
+} catch (error) {
+  console.error(error.code === 'EADDRINUSE' ? `Port ${port} sedang dipakai. Hentikan server lama dengan Ctrl+C atau atur PORT yang berbeda.` : `Server gagal dimulai: ${error.message}`);
+  await vite?.close();
+  server.close();
+  process.exitCode = 1;
+}
