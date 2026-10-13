@@ -5,6 +5,7 @@ import iconClass from './icon-class.svg';
 import iconProfile from './icon-profile.svg';
 import iconSearch from './icon-search.svg';
 import iconNote from './icon-note.svg';
+import iconCalendar from './icon-calendar.svg';
 import iconAdd from './icon-add.svg';
 import iconEdit from './icon-edit.svg';
 import iconGlobe from './icon-globe.svg';
@@ -19,6 +20,6 @@ const iconProfileActive = iconProfile;
 
 export {
   iconHome, iconHomeActive, iconClass, iconClassActive, iconProfile,
-  iconProfileActive, iconSearch, iconNote, iconAdd, iconEdit, iconGlobe,
+  iconProfileActive, iconSearch, iconNote, iconCalendar, iconAdd, iconEdit, iconGlobe,
   iconMic, iconMessage, avatarProfile, patternBlob,
 };

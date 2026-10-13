@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { iconNote, iconProfile, patternBlob } from '../assets';
+import { iconCalendar, iconProfile, patternBlob } from '../assets';
 import { useLanguage } from '../context/LanguageContext';
 
 export default function ClassCardLight({ item, index }) {
@@ -12,7 +12,7 @@ export default function ClassCardLight({ item, index }) {
       <div className="light-card-body">
         <strong>{item.title}</strong>
         <span><img src={iconProfile} alt="" />{item.lecturer}</span>
-        <span><img src={iconNote} alt="" />{item.note}</span>
+        <span><img className="calendar-icon" src={iconCalendar} alt="" />{item.note}</span>
         <button onClick={() => navigate(`/session/${item.id}`)}>{t.view}</button>
       </div>
     </motion.article>

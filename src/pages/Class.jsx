@@ -7,14 +7,17 @@ import ClassCardLight from '../components/ClassCardLight';
 import { classList } from '../data/classes';
 import { iconAdd } from '../assets';
 import { useLanguage } from '../context/LanguageContext';
+import RoomLobby from '../components/RoomLobby';
 
 export default function Class() {
   const [search, setSearch] = useState('');
   const { t } = useLanguage();
+  const [showLobby, setShowLobby] = useState(false);
   const filtered = classList.filter((item) => item.title.toLowerCase().includes(search.toLowerCase()));
   return <motion.div className="page page-class" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
     <PageHeader /><SearchBar value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t.searchClass} />
-    <SectionTitle action={<button className="add-button" aria-label="Tambah kelas"><img src={iconAdd} alt="" /></button>}>{t.yourClass}</SectionTitle>
+    <SectionTitle action={<button className="add-button" aria-label="Tambah kelas" aria-expanded={showLobby} onClick={() => setShowLobby(!showLobby)}><img src={iconAdd} alt="" /></button>}>{t.yourClass}</SectionTitle>
+    {showLobby && <RoomLobby />}
     <div className="class-grid">{filtered.map((item, index) => <ClassCardLight key={item.id} item={item} index={index} />)}</div>
   </motion.div>;
 }
