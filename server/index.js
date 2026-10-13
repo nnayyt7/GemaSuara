@@ -29,6 +29,10 @@ async function body(req) {
   return JSON.parse(text || '{}');
 }
 const production = process.env.NODE_ENV === 'production';
+const allowedOrigins = new Set((process.env.ALLOWED_ORIGINS || '').split(',').map((value) => value.trim()).filter(Boolean));
+const crossSite = process.env.COOKIE_SAME_SITE === 'none';
+if (crossSite && process.env.COOKIE_SECURE !== 'true') throw new Error('COOKIE_SAME_SITE=none requires COOKIE_SECURE=true');
+const cookieFlags = `HttpOnly; SameSite=${crossSite ? 'None' : 'Lax'}; Path=/${process.env.COOKIE_SECURE === 'true' ? '; Secure' : ''}`;
 const vite = production ? null : await (await import('vite')).createServer({ root, server: { middlewareMode: true }, appType: 'spa' });
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
@@ -46,8 +50,20 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   try {
+    const origin = req.headers.origin;
+    const sameOrigin = !origin || new URL(origin).host === req.headers.host;
+    if (origin && !sameOrigin && !allowedOrigins.has(origin)) return json(res, 403, { error: 'Origin tidak diizinkan.' });
+    if (origin && allowedOrigins.has(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+      res.setHeader('Vary', 'Origin');
+    }
+    if (req.method === 'OPTIONS') {
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Gema-Request');
+      res.writeHead(204); res.end(); return;
+    }
     if (req.method === 'POST') {
-      if (req.headers.origin && new URL(req.headers.origin).host !== req.headers.host) return json(res, 403, { error: 'Origin tidak diizinkan.' });
       if (req.headers['x-gema-request'] !== '1') return json(res, 403, { error: 'Permintaan tidak valid.' });
       const key = req.socket.remoteAddress;
       const now = Date.now();
@@ -60,7 +76,7 @@ const server = http.createServer(async (req, res) => {
       const input = await body(req); const name = String(input.name || '').trim().slice(0, 40);
       if (!name) return json(res, 400, { error: 'Masukkan nama.' });
       const token = id(); const user = { id: id(), name }; db.users[token] = user; await save();
-      res.setHeader('Set-Cookie', `gema_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000${process.env.COOKIE_SECURE === 'true' ? '; Secure' : ''}`);
+      res.setHeader('Set-Cookie', `gema_session=${token}; ${cookieFlags}; Max-Age=2592000`);
       return json(res, 200, user);
     }
     const user = userFor(req);
@@ -72,7 +88,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/logout' && req.method === 'POST') {
       for (const [token, value] of Object.entries(db.users)) if (value.id === user.id) delete db.users[token];
       for (const group of subscribers.values()) for (const client of group) if (client.userId === user.id) { client.res.end(); group.delete(client); }
-      await save(); res.setHeader('Set-Cookie', 'gema_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0'); return json(res, 200, { ok: true });
+      await save(); res.setHeader('Set-Cookie', `gema_session=; ${cookieFlags}; Max-Age=0`); return json(res, 200, { ok: true });
     }
     if (url.pathname === '/api/rooms') {
       if (req.method === 'POST') {

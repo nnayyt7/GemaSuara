@@ -6,7 +6,7 @@ import path from 'node:path';
 import { once } from 'node:events';
 
 const dir = await mkdtemp(path.join(tmpdir(), 'gema-test-'));
-const child = spawn(process.execPath, ['server/start.js'], { env: { ...process.env, PORT: '5198', DATA_DIR: dir }, stdio: ['ignore', 'pipe', 'inherit'] });
+const child = spawn(process.execPath, ['server/start.js'], { env: { ...process.env, PORT: '5198', DATA_DIR: dir, ALLOWED_ORIGINS: 'https://gema-suara.vercel.app', COOKIE_SAME_SITE: 'none', COOKIE_SECURE: 'true' }, stdio: ['ignore', 'pipe', 'inherit'] });
 const base = 'http://127.0.0.1:5198';
 const call = async (url, cookie = '', body) => {
   const response = await fetch(base + '/api' + url, { headers: { Cookie: cookie, 'Content-Type': 'application/json', 'X-Gema-Request': '1' }, ...(body !== undefined ? { method: 'POST', body: JSON.stringify(body) } : {}) });
@@ -15,9 +15,17 @@ const call = async (url, cookie = '', body) => {
 try {
   await Promise.race([once(child.stdout, 'data'), new Promise((_, reject) => setTimeout(() => reject(new Error('Server timeout')), 10000).unref())]);
   assert.equal((await call('/rooms')).response.status, 401);
+  const preflight = await fetch(`${base}/api/login`, { method: 'OPTIONS', headers: { Origin: 'https://gema-suara.vercel.app' } });
+  assert.equal(preflight.status, 204);
+  assert.equal(preflight.headers.get('access-control-allow-origin'), 'https://gema-suara.vercel.app');
+  assert.equal(preflight.headers.get('access-control-allow-credentials'), 'true');
+  const rejected = await fetch(`${base}/api/health`, { headers: { Origin: 'https://untrusted.example' } });
+  assert.equal(rejected.status, 403);
   const teacher = await call('/login', '', { name: 'Dosen Uji' });
   const student = await call('/login', '', { name: 'Mahasiswa Uji' });
   assert.equal(teacher.data.name, 'Dosen Uji');
+  assert.match(teacher.response.headers.get('set-cookie'), /SameSite=None/);
+  assert.match(teacher.response.headers.get('set-cookie'), /Secure/);
   const room = (await call('/rooms', teacher.cookie, { title: 'Kelas uji' })).data;
   assert.equal((await call(`/rooms/${room.id}`, student.cookie)).response.status, 404);
   await call('/join', student.cookie, { code: room.code });

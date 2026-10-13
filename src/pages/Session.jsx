@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useNavigate, useParams } from 'react-router-dom';
-import { api } from '../lib/api';
+import { api, apiUrl } from '../lib/api';
 import { useUser } from '../context/UserContext';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
@@ -45,7 +45,7 @@ export default function Session() {
     api(`/rooms/${id}`).then((value) => {
       if (disposed) return;
       setRoom(value);
-      events = new EventSource(`/api/rooms/${id}/events`);
+      events = new EventSource(apiUrl(`/rooms/${id}/events`), { withCredentials: true });
       events.onopen = () => setConnection('Terhubung langsung');
       events.onerror = () => setConnection('Menghubungkan ulang…');
       events.onmessage = (event) => {
